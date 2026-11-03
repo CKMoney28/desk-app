@@ -11,12 +11,22 @@ const Charts = (() => {
   function line(cv, data, prev) {
     const run = (k) => {
       const [ctx, W, H] = setup(cv); ctx.clearRect(0, 0, W, H);
-      const pts = data.points || [], top = 44, bot = H - 8;
+      const pts = data.points || []; let top = 44; const bot = H - 8;
       if (pts.length < 2) {
         ctx.setLineDash([4, 4]); ctx.strokeStyle = C.t3; ctx.beginPath(); ctx.moveTo(0, H / 2); ctx.lineTo(W, H / 2); ctx.stroke(); ctx.setLineDash([]);
-        ctx.fillStyle = C.t2; ctx.font = "15px -apple-system"; ctx.textAlign = "center"; ctx.fillText("Waiting for the first trade", W / 2, H / 2 - 12); return;
+        ctx.fillStyle = C.t2; ctx.font = "15px -apple-system, system-ui, sans-serif"; ctx.textAlign = "center"; ctx.fillText("Waiting for the first trade", W / 2, H / 2 - 12); return;
       }
       const t0 = pts[0][0], t1 = pts[pts.length - 1][0];
+      // lay out marks first: never overlap; a later mark moves up a row; chart top leaves room for every row
+      ctx.font = "600 11px -apple-system, system-ui, sans-serif"; ctx.textAlign = "left"; const rows = [], laid = [];
+      const X0 = t => (t1 === t0 ? W : (t - t0) / (t1 - t0) * W);
+      (data.marks || []).forEach(m => {
+        if (m.ts < t0) return;
+        const w = ctx.measureText(m.label).width + 12, x = Math.min(Math.max(X0(m.ts) - w / 2, 0), W - w);
+        let r = 0; while ((rows[r] || []).some(([a, b]) => x < b + 4 && x + w > a - 4)) r++;
+        (rows[r] = rows[r] || []).push([x, x + w]); laid.push([m, x, w, r]);
+      });
+      top = Math.max(top, 4 + rows.length * 22);
       let lo = Math.min(...pts.map(p => p[1]), data.start ?? Infinity), hi = Math.max(...pts.map(p => p[1]), data.start ?? -Infinity);
       if (hi - lo < 1e-9) { hi += 1; lo -= 1; }
       const X = t => (t1 === t0 ? W : (t - t0) / (t1 - t0) * W), Y = v => bot - (v - lo) / (hi - lo) * (bot - top);
@@ -29,18 +39,13 @@ const Charts = (() => {
       ctx.beginPath(); pts.slice(0, n - 1).forEach((p, i) => i ? ctx.lineTo(X(p[0]), Y(p[1])) : ctx.moveTo(X(p[0]), Y(p[1]))); ctx.lineTo(endX, endY);
       ctx.strokeStyle = C.green; ctx.lineWidth = 2; ctx.stroke();
       if (data.start != null) { ctx.setLineDash([3, 4]); ctx.strokeStyle = C.t3; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(0, Y(data.start)); ctx.lineTo(W, Y(data.start)); ctx.stroke(); ctx.setLineDash([]); }
-      // marks: never overlap; a later mark moves up a row
-      ctx.font = "600 11px -apple-system"; const rows = [];
-      (data.marks || []).forEach(m => {
-        if (m.ts < t0) return;
-        const w = ctx.measureText(m.label).width + 12, x = Math.min(Math.max(X(m.ts) - w / 2, 0), W - w);
-        let r = 0; while ((rows[r] || []).some(([a, b]) => x < b + 4 && x + w > a - 4)) r++;
-        (rows[r] = rows[r] || []).push([x, x + w]);
-        const y = Math.max(2, 26 - r * 20 + (r ? 0 : 0)); const yy = top - 22 - r * 20 < 0 ? 2 + r * 0 : top - 22 - r * 20;
+      ctx.font = "600 11px -apple-system, system-ui, sans-serif"; ctx.textAlign = "left";
+      laid.forEach(([m, x, w, r]) => {
+        const yy = top - 22 - r * 22;
         ctx.globalAlpha = Math.min(1, k * 1.25);
         ctx.fillStyle = m.kind === "bought" ? C.blue : m.kind === "sold" ? C.green : C.red;
-        ctx.beginPath(); ctx.roundRect(x, Math.max(0, yy), w, 18, 9); ctx.fill(); ctx.fillStyle = m.kind === "sold" ? "#000" : "#fff";
-        ctx.fillText(m.label, x + 6, Math.max(0, yy) + 13); ctx.globalAlpha = 1;
+        ctx.beginPath(); ctx.roundRect(x, yy, w, 18, 9); ctx.fill(); ctx.fillStyle = m.kind === "sold" ? "#000" : "#fff";
+        ctx.fillText(m.label, x + 6, yy + 13); ctx.globalAlpha = 1;
       });
     };
     if (reduce || !prev || prev === JSON.stringify(data.points)) return run(1);
@@ -49,7 +54,7 @@ const Charts = (() => {
   // Coin candles: [{t,o,h,l,c,v}], exit line (orange dashed)
   function candles(cv, cs, exitLine) {
     const [ctx, W, H] = setup(cv); ctx.clearRect(0, 0, W, H);
-    if (!cs || !cs.length) { ctx.fillStyle = C.t2; ctx.font = "15px -apple-system"; ctx.textAlign = "center"; ctx.fillText("No candles yet", W / 2, H / 2); return; }
+    if (!cs || !cs.length) { ctx.fillStyle = C.t2; ctx.font = "15px -apple-system, system-ui, sans-serif"; ctx.textAlign = "center"; ctx.fillText("No candles yet", W / 2, H / 2); return; }
     const vh = H * 0.2, ph = H - vh - 8;
     let lo = Math.min(...cs.map(c => c.l)), hi = Math.max(...cs.map(c => c.h));
     if (exitLine) { lo = Math.min(lo, exitLine); hi = Math.max(hi, exitLine); }
@@ -63,14 +68,14 @@ const Charts = (() => {
     });
     if (exitLine) {
       ctx.setLineDash([6, 4]); ctx.strokeStyle = C.orange; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(0, Y(exitLine)); ctx.lineTo(W, Y(exitLine)); ctx.stroke(); ctx.setLineDash([]);
-      ctx.fillStyle = C.orange; ctx.font = "600 11px -apple-system"; ctx.fillText("Risk trailing stop", 4, Y(exitLine) - 4);
+      ctx.fillStyle = C.orange; ctx.font = "600 11px -apple-system, system-ui, sans-serif"; ctx.fillText("Risk trailing stop", 4, Y(exitLine) - 4);
     }
   }
   function ring(cv, score, min) {
     const [ctx, W, H] = setup(cv); ctx.clearRect(0, 0, W, H); const r = Math.min(W, H) / 2 - 6;
     ctx.lineWidth = 8; ctx.strokeStyle = "#2c2c2e"; ctx.beginPath(); ctx.arc(W / 2, H / 2, r, 0, Math.PI * 2); ctx.stroke();
     if (score != null) { ctx.strokeStyle = score >= min ? C.green : C.red; ctx.lineCap = "round"; ctx.beginPath(); ctx.arc(W / 2, H / 2, r, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * score / 100); ctx.stroke(); }
-    ctx.fillStyle = "#fff"; ctx.font = "600 26px -apple-system"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(score == null ? "–" : score, W / 2, H / 2);
+    ctx.fillStyle = "#fff"; ctx.font = "600 26px -apple-system, system-ui, sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(score == null ? "–" : score, W / 2, H / 2);
   }
   return {line, candles, ring};
 })();

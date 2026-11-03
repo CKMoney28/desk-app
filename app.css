@@ -77,3 +77,4 @@ h2 a,h2 button{font-size:15px;font-weight:400;color:var(--blue);min-height:auto}
 .seg{display:flex;background:var(--c1);border-radius:9px;padding:2px}.seg button{flex:1;border-radius:7px;font-weight:600;font-size:13px;min-height:36px}.seg button.on{background:var(--c2)}
 .ring{width:96px;height:96px}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+.offline .err{z-index:40}.offline .sheet{top:calc(33px + env(safe-area-inset-top))}

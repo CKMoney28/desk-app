@@ -42,10 +42,10 @@ async function refresh() {
   S.retryIn = POLL_S; renderErr(); render();
 }
 function renderErr() {
-  if (!S.failing && S.lastOk) { errBar.hidden = true; return; }
+  if (!S.failing && S.lastOk) { errBar.hidden = true; document.body.classList.remove("offline"); return; }
   if (!DP) { errBar.hidden = true; return; }
   const last = S.state ? tm(S.state.updatedAt) : "never";
-  errBar.hidden = false; errBar.textContent = `Desk offline · retrying in ${S.retryIn}s · last update ${last}`;
+  document.body.classList.add("offline"); errBar.hidden = false; errBar.textContent = `Desk offline · retrying in ${S.retryIn}s · last update ${last}`;
 }
 setInterval(() => { if (S.retryIn > 0) S.retryIn--; if (S.failing) renderErr(); if (S.retryIn === 0) refresh(); }, 1000);
 
@@ -197,10 +197,12 @@ async function openCoin(mint) {
   S.sheet = {refresh: () => openCoin(mint)}; sheet.hidden = false;
   if (!sheet.innerHTML) sheet.innerHTML = `<div class="nav"><button class="back" data-back>‹ Back</button></div><div class="skel" style="height:60px"></div><div class="skel" style="height:240px;margin-top:12px"></div>`;
   let c; try { c = await get(`coin/${mint}.json`); } catch (e) {
+    if (S.coinShown === mint && sheet.querySelector("#cdl")) return;   // offline: keep the last good numbers
     sheet.innerHTML = `<div class="nav"><button class="back" data-back>‹ Back</button></div><div class="empty">This coin isn't in the latest desk update.</div>`; return; }
   const p = c.position && !c.position.closed_at ? c.position : null;
   const ageH = c.migratedAt ? Math.floor((Date.now() / 1000 - c.migratedAt) / 3600) : null;
   const since = p && c.price ? (c.price / p.entry_price - 1) * 100 : null;
+  S.coinShown = mint;
   sheet.innerHTML = `<div class="nav"><button class="back" data-back>‹ Back</button><span class="title"></span>${paperBadge()}</div>
     <h2 style="margin-top:4px">${esc(c.name || short(mint))}<span class="chip" data-audit="${esc(mint)}">🛡 ${esc(c.shield)}</span></h2>
     <div class="sec">${esc(c.symbol || "")} · Solana · ${ageH == null ? "–" : ageH < 1 ? Math.floor((Date.now()/1000 - c.migratedAt)/60) + "m" : ageH + "h"} old</div>
